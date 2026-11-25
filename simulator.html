@@ -1,6 +1,6 @@
 <!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lab Jaringan Kampus</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f2f5f6;color:#182a35;font:15px system-ui}header{background:#12313d;color:white;padding:23px max(22px,calc((100vw - 1320px)/2));border-bottom:4px solid #42c4a1}h1{margin:0;font-size:30px}p{line-height:1.5}header p{margin:5px 0 0;color:#c3d9df}main{max-width:1364px;margin:auto;padding:22px}nav,.controls{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:15px}button,select{font:inherit;padding:9px 13px;border:1px solid #aebec7;border-radius:7px;background:white;color:#182a35}button{cursor:pointer}button:hover{border-color:#087f6a}button[aria-pressed=true],.primary{background:#116b5e;color:white;border-color:#116b5e}button:disabled{opacity:.48;cursor:default}.layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px}.panel,.board{background:white;border:1px solid #cfdce0;border-radius:12px;padding:16px}.board{overflow:auto;background-image:radial-gradient(#cbd8de 1px,transparent 1px);background-size:19px 19px}.board svg{display:block;width:100%;min-width:690px;height:auto}.node{cursor:pointer;outline:none}.node rect{fill:white;stroke:#628391;stroke-width:2}.node:hover rect,.node:focus rect,.node.selected rect{stroke:#087f6a;stroke-width:3}.edge{stroke:#78929a;stroke-width:4}.down{stroke:#b33d41;stroke-dasharray:7 5}.standby{stroke:#a97920;stroke-dasharray:4 7}.pulse{fill:#0d937a;stroke:white;stroke-width:3}.panel h2{font-size:18px;margin:0 0 8px}#details{white-space:pre-wrap;font:13px/1.65 monospace}#toggles{display:grid;gap:10px;margin:13px 0 16px}section.panel{margin-top:14px}.controls{align-items:end}.controls label{display:grid;gap:4px;font-size:13px}.events{overflow:auto;max-height:275px}table{width:100%;border-collapse:collapse;text-align:left}td,th{padding:9px;border-bottom:1px solid #dbe6e9}th{background:#eaf2f3;position:sticky;top:0}.good{color:#086657}.bad{color:#a42f36}@media(max-width:850px){.layout{grid-template-columns:1fr}}
+*{box-sizing:border-box}body{margin:0;background:#f2f5f6;color:#182a35;font:15px system-ui}header{background:#12313d;color:white;padding:23px max(22px,calc((100vw - 1320px)/2));border-bottom:4px solid #42c4a1}h1{margin:0;font-size:30px}p{line-height:1.5}header p{margin:5px 0 0;color:#c3d9df}main{max-width:1364px;margin:auto;padding:22px}nav,.controls{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:15px}button,select{font:inherit;padding:9px 13px;border:1px solid #aebec7;border-radius:7px;background:white;color:#182a35}button{cursor:pointer}button:hover{border-color:#087f6a}button[aria-pressed=true],.primary{background:#116b5e;color:white;border-color:#116b5e}button:disabled{opacity:.48;cursor:default}.layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px}.panel,.board{background:white;border:1px solid #cfdce0;border-radius:12px;padding:16px}.board{overflow:auto;background-image:radial-gradient(#cbd8de 1px,transparent 1px);background-size:19px 19px}.board svg{display:block;width:100%;min-width:690px;height:auto}.node{cursor:pointer;outline:none}.device-hit{fill:transparent;pointer-events:all}.device-ring{fill:none;stroke:transparent;stroke-width:2;pointer-events:none}.node:hover .device-ring,.node:focus .device-ring,.node.selected .device-ring{stroke:#087f6a;stroke-dasharray:4 3}.device-label{font-size:13px;font-weight:750;fill:#182a35;stroke:#f8fbfc;stroke-width:4;paint-order:stroke;stroke-linejoin:round}.edge{stroke:#78929a;stroke-width:4}.down{stroke:#b33d41;stroke-dasharray:7 5}.standby{stroke:#a97920;stroke-dasharray:4 7}.pulse{fill:#0d937a;stroke:white;stroke-width:3}.panel h2{font-size:18px;margin:0 0 8px}#details{white-space:pre-wrap;font:13px/1.65 monospace}#toggles{display:grid;gap:10px;margin:13px 0 16px}section.panel{margin-top:14px}.controls{align-items:end}.controls label{display:grid;gap:4px;font-size:13px}.events{overflow:auto;max-height:275px}table{width:100%;border-collapse:collapse;text-align:left}td,th{padding:9px;border-bottom:1px solid #dbe6e9}th{background:#eaf2f3;position:sticky;top:0}.good{color:#086657}.bad{color:#a42f36}@media(max-width:850px){.layout{grid-template-columns:1fr}}
 </style>
 <header><h1>Lab Jaringan Kampus</h1><p>Jaringan Telekomunikasi P1–P15 · Simulasi pembelajaran Pendidikan Teknik Elektro</p></header>
 <main><p>Topik P1–P5 dan P7 disusun sebagai latihan dasar. P8 digunakan untuk UTS dan P16 untuk UAS.</p><nav id="tabs" aria-label="Pertemuan"></nav><div class="layout"><div class="board"><svg id="map" viewBox="0 0 900 370" aria-label="Topologi jaringan kampus"></svg></div><aside class="panel"><h2 id="topic"></h2><p id="exercise"></p><div id="toggles"></div><h2>Konfigurasi perangkat</h2><div id="details"></div></aside></div>
@@ -213,6 +213,53 @@ function traceProject(f,which){
  return trace(w,f,from,dest,protocol);
 }
 
+const icons = {
+ PC: `<rect x="-31" y="-28" width="46" height="31" rx="3" fill="#264b61"/>
+   <rect x="-26" y="-23" width="36" height="19" rx="1" fill="#c0edf6"/>
+   <path d="M-8 3v7m-12 1H4M-29 16H12" stroke="#264b61" stroke-width="3" stroke-linecap="round"/>
+   <rect x="21" y="-25" width="12" height="39" rx="2" fill="#456b80"/>
+   <path d="M24-17h6m-6 5h6" stroke="#d9f1f7" stroke-width="1.4"/>
+   <circle cx="27" cy="8" r="1.9" fill="#8af4c8"/>`,
+ 'WI-FI': `<rect x="-26" y="-28" width="52" height="35" rx="4" fill="#315975"/>
+   <rect x="-21" y="-23" width="42" height="24" rx="1" fill="#c8e9fa"/>
+   <path d="M-27 8H27L35 17H-35Z" fill="#406e87"/>
+   <path d="M-7 10H7" stroke="#b5e9f7" stroke-width="2"/>
+   <path d="M-10-13q10-8 20 0m-16 4q6-5 12 0m-8 4q2-2 4 0" fill="none" stroke="#315975" stroke-width="1.6" stroke-linecap="round"/>`,
+ SWITCH: `<path d="M-35-13L-25-24H25L35-13Z" fill="#619c92"/>
+   <rect x="-35" y="-13" width="70" height="28" rx="3" fill="#23695f"/>
+   <path d="M-28-5h7v5h-7zm11 0h7v5h-7zm11 0h7v5h-7zm11 0h7v5h-7zm11 0h7v5h-7z" fill="#c3eee1"/>
+   <path d="M-28 4h7v5h-7zm11 0h7v5h-7zm11 0h7v5h-7zm11 0h7v5h-7zm11 0h7v5h-7z" fill="#96c7bc"/>
+   <circle cx="29" cy="-3" r="2" fill="#9affbe"/>`,
+ 'SWITCH L3': `<path d="M-35-13L-25-24H25L35-13Z" fill="#629b92"/>
+   <rect x="-35" y="-13" width="70" height="28" rx="3" fill="#1b5d55"/>
+   <path d="M-28-5h7v5h-7zm11 0h7v5h-7zm11 0h7v5h-7zm-22 9h7v5h-7zm11 0h7v5h-7zm11 0h7v5h-7z" fill="#c3eee1"/>
+   <path d="M5-3h21m-4-4 4 4-4 4m4 5H5m4-4L5 6l4 4" fill="none" stroke="#efffff" stroke-width="1.5"/>`,
+ ROUTER: `<path d="M-31-15v17c0 8 14 14 31 14s31-6 31-14v-17Z" fill="#2d608a"/>
+   <ellipse cy="-14" rx="31" ry="12" fill="#6b9bc3"/>
+   <path d="M-14-14H14m-5-4 5 4-5 4m-4-11L-5-7m-2-4 2 4 5-1m-7-10-5 4 5 4" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+   <circle cx="17" cy="5" r="1.7" fill="#b3f8dc"/><circle cx="22" cy="3" r="1.7" fill="#b3f8dc"/>`,
+ SERVER: `<path d="M-20-30h33l7 5h-33l-7-5Z" fill="#a59ace"/><path d="M20-25v36l-8 6v-42Z" fill="#574674"/>
+   <rect x="-20" y="-30" width="34" height="47" rx="3" fill="#725d9a"/>
+   <path d="M-16-21H9m-25 9H9m-25 9H9m-25 9H9" stroke="#d4c8eb" stroke-width="1.5"/>
+   <path d="M-13-25h8m-8 9h8m-8 9h8m-8 9h8" stroke="#9cf2cc" stroke-width="1.5"/>
+   <path d="M-17 19H11" stroke="#574674" stroke-width="2.5" stroke-linecap="round"/>`,
+ 'ACCESS POINT': `<path d="M-23-4v-17m46 17v-17" fill="none" stroke="#8c551d" stroke-width="3" stroke-linecap="round"/>
+   <path d="M-12-19q12-10 24 0m-20 4q8-7 16 0m-12 4q4-4 8 0" fill="none" stroke="#b46b26" stroke-width="2" stroke-linecap="round"/>
+   <rect x="-32" y="-5" width="64" height="20" rx="6" fill="#b2783d"/>
+   <path d="M-24 7h19" stroke="#f6d2a4" stroke-width="2" stroke-linecap="round"/>
+   <circle cx="18" cy="5" r="2" fill="#fff1b5"/><circle cx="24" cy="5" r="2" fill="#ddf4be"/>`
+};
+function drawDevice(id,[x,y,label,kind]){
+ const normalized=kind==='ROUTER'||kind==='SERVER'||kind==='PC'||kind==='WI-FI'||kind==='ACCESS POINT'||kind==='SWITCH L3'?kind:'SWITCH';
+ return `<g class="node ${id===selected?'selected':''}" data-node="${id}" tabindex="0" role="button" aria-label="${label}" transform="translate(${x} ${y})">
+   <title>${label} · ${kind}</title>
+   <rect class="device-hit" x="-54" y="-35" width="108" height="74" rx="10"/>
+   <circle class="device-ring" cx="0" cy="-8" r="37"/>
+   <g aria-hidden="true">${icons[normalized]}</g>
+   <text class="device-label" text-anchor="middle" y="37">${label}</text>
+ </g>`;
+}
+
 function renderMap(active){
  const svg=el('map'), nodes=topology();
  const currentLinks=week<9?data()[7]:week===14?wifiLinks:links;
@@ -232,7 +279,7 @@ function renderMap(active){
    const down=(week===1&&a==='A'&&!flags.cable)||((week===10||week===15)&&a==='R1'&&b==='R2'&&!flags.link);
    return drawLink(a,b,0,down?'down':'');
  }).join('')+
- visible.map(id=>{const [x,y,label,kind]=nodes[id];return `<g class="node ${id===selected?'selected':''}" data-node="${id}" tabindex="0" role="button" aria-label="${label}" transform="translate(${x} ${y})"><rect x="-57" y="-24" width="114" height="48" rx="8"/><text text-anchor="middle" y="-3" font-size="10" fill="#52717e">${kind}</text><text text-anchor="middle" y="14" font-size="13" font-weight="700" fill="#182a35">${label}</text></g>`;}).join('')+
+ visible.map(id=>drawDevice(id,nodes[id])).join('')+
  (active?`<circle class="pulse" cx="${nodes[active][0]+47}" cy="${nodes[active][1]-21}" r="9"/>`:'');
 }
 function inspectNode(id){
