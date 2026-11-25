@@ -1,0 +1,302 @@
+<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lab Jaringan Kampus</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f2f5f6;color:#182a35;font:15px system-ui}header{background:#12313d;color:white;padding:23px max(22px,calc((100vw - 1320px)/2));border-bottom:4px solid #42c4a1}h1{margin:0;font-size:30px}p{line-height:1.5}header p{margin:5px 0 0;color:#c3d9df}main{max-width:1364px;margin:auto;padding:22px}nav,.controls{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:15px}button,select{font:inherit;padding:9px 13px;border:1px solid #aebec7;border-radius:7px;background:white;color:#182a35}button{cursor:pointer}button:hover{border-color:#087f6a}button[aria-pressed=true],.primary{background:#116b5e;color:white;border-color:#116b5e}button:disabled{opacity:.48;cursor:default}.layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px}.panel,.board{background:white;border:1px solid #cfdce0;border-radius:12px;padding:16px}.board{overflow:auto;background-image:radial-gradient(#cbd8de 1px,transparent 1px);background-size:19px 19px}.board svg{display:block;width:100%;min-width:690px;height:auto}.node{cursor:pointer;outline:none}.node rect{fill:white;stroke:#628391;stroke-width:2}.node:hover rect,.node:focus rect,.node.selected rect{stroke:#087f6a;stroke-width:3}.edge{stroke:#78929a;stroke-width:4}.down{stroke:#b33d41;stroke-dasharray:7 5}.standby{stroke:#a97920;stroke-dasharray:4 7}.pulse{fill:#0d937a;stroke:white;stroke-width:3}.panel h2{font-size:18px;margin:0 0 8px}#details{white-space:pre-wrap;font:13px/1.65 monospace}#toggles{display:grid;gap:10px;margin:13px 0 16px}section.panel{margin-top:14px}.controls{align-items:end}.controls label{display:grid;gap:4px;font-size:13px}.events{overflow:auto;max-height:275px}table{width:100%;border-collapse:collapse;text-align:left}td,th{padding:9px;border-bottom:1px solid #dbe6e9}th{background:#eaf2f3;position:sticky;top:0}.good{color:#086657}.bad{color:#a42f36}@media(max-width:850px){.layout{grid-template-columns:1fr}}
+</style>
+<header><h1>Lab Jaringan Kampus</h1><p>Jaringan Telekomunikasi P1–P15 · Simulasi pembelajaran Pendidikan Teknik Elektro</p></header>
+<main><p>Topik P1–P5 dan P7 disusun sebagai latihan dasar. P8 digunakan untuk UTS dan P16 untuk UAS.</p><nav id="tabs" aria-label="Pertemuan"></nav><div class="layout"><div class="board"><svg id="map" viewBox="0 0 900 370" aria-label="Topologi jaringan kampus"></svg></div><aside class="panel"><h2 id="topic"></h2><p id="exercise"></p><div id="toggles"></div><h2>Konfigurasi perangkat</h2><div id="details"></div></aside></div>
+<section class="panel"><div class="controls"><label>Sumber<select id="from"></select></label><label>Tujuan<select id="to"></select></label><label>Protokol<select id="proto"></select></label><button id="send" class="primary">Kirim paket</button><button id="step">Langkah berikut</button><button id="play">Jalankan otomatis</button><button id="reset">Reset skenario</button></div><p id="status" role="status"></p><div class="events"><table><thead><tr><th>#</th><th>Perangkat</th><th>Protokol</th><th>Kejadian</th></tr></thead><tbody id="log"></tbody></table></div></section></main>
+<script>
+const devices={
+ MHS:[69,89,'PC Mahasiswa','PC','10.10.10.100/24\nGW 10.10.10.1\nDNS 10.10.20.53'],
+ DSN:[69,241,'PC Dosen','PC','10.10.30.100/24\nGW 10.10.30.1\nDNS 10.10.20.53'],
+ SW:[216,165,'SW-Akses','SWITCH','Port akses VLAN 10 dan 30\nTrunk 802.1Q ke R1'],
+ R1:[356,165,'R1','ROUTER','VLAN 10: 10.10.10.1/24\nVLAN 30: 10.10.30.1/24\nR2: 10.0.12.1/30\nR3: 10.0.13.1/30\nR-Edge: 10.0.14.1/30\nRelay DHCP: 10.10.20.53'],
+ R3:[473,63,'R3','ROUTER','R1: 10.0.13.2/30\nR2: 10.0.23.1/30\nOSPF area 0 · jalur cadangan'],
+ R2:[591,165,'R2','ROUTER','R1: 10.0.12.2/30\nR3: 10.0.23.2/30\nLAN B: 10.10.20.1/24'],
+ SWB:[726,165,'SW-Layanan','SWITCH','Segmen layanan LAN B'],
+ PORTAL:[833,88,'Portal / DNS','SERVER','10.10.20.53/24\nGW 10.10.20.1\nDHCP pool VLAN 10: .100–149\nDNS: portal.kampus.test\nHTTP aktif'],
+ ADMIN:[833,241,'Server Admin','SERVER','10.10.20.80/24\nGW 10.10.20.1\nHTTP aktif'],
+ EDGE:[473,310,'R-Edge','ROUTER','Inside: 10.0.14.2/30\nOutside: 203.0.113.2/30\nPAT untuk VLAN 10\nDefault via 203.0.113.1'],
+ ISP:[648,310,'R-ISP','ROUTER','R-Edge: 203.0.113.1/30\nLAN luar: 198.51.100.1/24'],
+ WEB:[833,310,'Web Luar','SERVER','198.51.100.10/24\nGW 198.51.100.1\nHTTP aktif']
+};
+const links=[['MHS','SW'],['DSN','SW'],['SW','R1'],['R1','R2'],['R1','R3'],['R3','R2'],['R2','SWB'],['SWB','PORTAL'],['SWB','ADMIN'],['R1','EDGE'],['EDGE','ISP'],['ISP','WEB']];
+const lessons={
+ 9:['Routing statis','Matikan rute balik di R2. Perhatikan posisi terakhir Echo Reply.','Rute balik aktif','back','ICMP','PORTAL'],
+ 10:['OSPF','Putus link utama dan amati perpindahan paket via R3 setelah konvergensi.','Link R1–R2 aktif','link','ICMP','PORTAL'],
+ 11:['DHCP dan DNS','Jalankan DHCP untuk mengamati DORA. Bandingkan HTTP via nama dengan HTTP langsung ke IP saat DNS mati.','DNS aktif','dns','DHCP','PORTAL'],
+ 12:['NAT/PAT','Amati translasi alamat dan port di R-Edge. Matikan PAT dan ulangi akses web luar.','PAT aktif','pat','HTTP','WEB'],
+ 13:['ACL','Bandingkan HTTP dari mahasiswa dan dosen ke server admin, lalu coba ICMP dari mahasiswa.','ACL aktif','acl','HTTP','ADMIN'],
+ 14:['WLAN dan VLAN','Bandingkan alamat DHCP dari dua SSID. Pindahkan port AP-MHS ke VLAN 30 dan kirim ulang untuk memperbarui sewa.','Port AP-MHS di VLAN 10 (matikan untuk VLAN 30)','wifiVlan','DHCP','PORTAL'],
+ 15:['Workshop proyek jaringan kampus']
+};
+const el=id=>document.getElementById(id);
+let week=1,flags,events=[],cursor=0,timer=null,selected='A',variant='inter',project='portal';
+const data=()=>week===6?p6[variant]:week<9?early[week]:week===15?projectCases[project]:lessons[week];
+const topology=()=>week<9?earlyDevices:week===14?wifi:devices;
+
+function trace(w,f,from,to,protocol){
+ const out=[]; const add=(n,m,p=protocol,bad=false)=>out.push({n,m,p,bad});
+ const outside=to==='WEB', transit=!outside&&w===10&&!f.link?['R3','R2']:['R2'];
+ const tail=outside?['EDGE','ISP','WEB']:[...transit,'SWB',to];
+ const send=(path,msg,p=protocol)=>path.forEach((n,i)=>add(n,i===path.length-1?msg:'Meneruskan paket',p));
+ if(protocol==='DHCP'){
+   const go=[from,'SW','R1',...transit,'SWB','PORTAL'];
+   for(const stage of ['Discover','Offer','Request','ACK']){
+     const request=['Discover','Request'].includes(stage);
+     const path=request?go:[...go].reverse();
+     path.forEach((n,i)=>add(n,n==='R1'?'DHCP '+stage+' melalui relay':i===path.length-1&&stage==='ACK'?'ACK · 10.10.10.100/24, GW 10.10.10.1, DNS 10.10.20.53':'DHCP '+stage,'DHCP'));
+   }
+   return out;
+ }
+ if(w===10&&!f.link&&!outside)add('R1','Setelah konvergensi: next hop 10.0.13.2 via R3','OSPF');
+ const named=protocol==='HTTP + DNS';
+ if(named){
+   const go=[from,'SW','R1',...transit,'SWB','PORTAL'];
+   send(go,'Kueri A portal.kampus.test','DNS');
+   if(!f.dns){add('PORTAL','DNS tidak merespons. Koneksi HTTP melalui nama tidak dimulai.','DNS',true);return out;}
+   send(go.slice().reverse(),'Respons A 10.10.20.53','DNS');
+ }
+ const packet=named?'HTTP':protocol;
+ const http=packet==='HTTP';
+ add(from,http?'Mulai koneksi TCP ke port 80':'Kirim Echo Request',packet);
+ send(['SW','R1'],'Periksa rute dan kebijakan',packet);
+ if(w===13&&f.acl&&from==='MHS'&&to==='ADMIN'&&http){add('R1','ACL menolak TCP/80 dari VLAN 10 ke 10.10.20.80',packet,true);return out;}
+ if(w===12&&outside){
+   add('EDGE',f.pat?'PAT: 10.10.10.100:49152 → 203.0.113.2:40001':'Paket keluar dengan alamat privat 10.10.10.100',packet);
+   send(['ISP','WEB'],'Server menerima SYN',packet);
+   if(!f.pat){add('ISP','Balasan gagal. ISP tidak memiliki rute ke subnet privat.',packet,true);return out;}
+   add('ISP','Balasan menuju 203.0.113.2:40001',packet);
+   add('EDGE','Translasi balik ke 10.10.10.100:49152',packet);
+   send(['R1','SW',from],'Koneksi dan HTTP berhasil',packet);return out;
+ }
+ send(tail,http?'Server menerima koneksi TCP/80':'Host tujuan menerima Echo Request',packet);
+ if(w===9&&!f.back){send(['SWB','R2'],'Periksa rute balik',packet);add('R2','Rute balik ke 10.10.10.0/24 tidak tersedia',packet,true);return out;}
+ send([...tail.slice(0,-1).reverse(),'R1','SW',from],http?'HTTP berhasil':'Echo Reply sampai ke sumber',packet);
+ return out;
+}
+const earlyDevices={
+ A:[95,128,'PC-A','PC','IPv4 192.168.10.10/24\nMAC 02:00:00:00:00:0A\nGateway 192.168.10.1'],
+ B:[100,300,'PC-B','PC','IPv4 192.168.10.20/24\nMAC 02:00:00:00:00:0B\nGateway 192.168.10.1'],
+ S1:[285,128,'SW1','SWITCH','Gi0/1: port akses PC-A\nGi0/2: uplink ke SW2'],
+ S2:[531,128,'SW2','SWITCH','Gi0/1: port akses PC-B\nGi0/2: uplink ke SW1'],
+ S3:[405,273,'SW3','SWITCH','Jalur redundan SW2–SW3–SW1\nSW1 root bridge pada skenario STP'],
+ L3:[525,130,'SW-L3','SWITCH L3','SVI VLAN 10: 192.168.10.1/24\nSVI VLAN 20: 192.168.20.1/24'],
+ X:[776,128,'PC Tujuan','PC','IPv4 192.168.20.20/24\nGateway 192.168.20.1'],
+ RA:[350,128,'R-A','ROUTER','LAN: 192.168.10.1/24\nTransit: 10.0.12.1/30'],
+ RB:[610,128,'R-B','ROUTER','Transit: 10.0.12.2/30\nLAN: 192.168.20.1/24'],
+ D:[721,292,'Server','SERVER','IPv4 192.168.10.53/24\nHTTP TCP port 80']
+};
+const early={
+ 1:['Dasar jaringan','Hubungkan dua PC pada satu LAN dan amati peran switch.','Kabel PC-A aktif','cable','ICMP','B',['A','S1','B'],[['A','S1'],['S1','B']]],
+ 2:['Model OSI dan TCP/IP','Ikuti penambahan header dari HTTP hingga frame Ethernet.','Layanan HTTP aktif','http','HTTP','D',['A','S1','D'],[['A','S1'],['S1','D']]],
+ 3:['Ethernet dan ARP','Bandingkan ARP Request broadcast, ARP Reply unicast, dan penerusan ICMP.','ARP cache sudah terisi','arp','ARP + ICMP','B',['A','S1','B'],[['A','S1'],['S1','B']]],
+ 4:['IPv4 dan subnetting','Uji pengaruh subnet mask pada keputusan apakah alamat tujuan berada pada satu jaringan.','Mask PC-A /24 (matikan untuk /28)','mask','ICMP','B',['A','S1','B'],[['A','S1'],['S1','B']]],
+ 5:['VLAN dan trunk','Uji ping antar-switch pada VLAN 10. Ubah VLAN port tujuan untuk melihat efek pemisahan broadcast domain.','PC-B di VLAN 10 (matikan untuk VLAN 20)','vlan','ICMP','B',['A','S1','S2','B'],[['A','S1'],['S1','S2'],['S2','B']]],
+ 6:['Inter-VLAN, STP, dan agregasi','Pilih eksperimen P6 dan bandingkan dua kondisi.'],
+ 7:['Gateway dan routing dasar','Ikuti keputusan PC dan router ketika alamat tujuan berada di jaringan lain.','Gateway PC-A aktif','gateway','ICMP','X',['A','RA','RB','X'],[['A','RA'],['RA','RB'],['RB','X']]]
+};
+const p6={
+ inter:['Inter-VLAN','Uji dua VLAN yang terhubung ke switch Layer 3.','Routing antar-VLAN aktif','inter','ICMP','X',['A','S1','L3','X'],[['A','S1'],['S1','L3'],['L3','X']]],
+ stp:['STP','SW1 root bridge. Matikan link utama SW1–SW2 dan amati jalur setelah konvergensi.','Link utama SW1–SW2 aktif','stp','ICMP','B',['A','S1','S2','S3','B'],[['A','S1'],['S1','S2'],['S1','S3'],['S3','S2'],['S2','B']]],
+ lag:['Link Aggregation','Dua link membentuk satu Port-channel. Matikan satu anggota dan uji kembali.','Anggota kedua aktif','lag','ICMP','B',['A','S1','S2','B'],[['A','S1'],['S1','S2'],['S2','B']]]
+};
+function traceEarly(w,f,variant){
+ const out=[];
+ const add=(n,m,p='ICMP',bad=false)=>out.push({n,m,p,bad});
+ const ping=(path)=>path.forEach((n,i)=>add(n,i===0?'Kirim Echo Request':i===path.length-1?'Echo Reply sampai ke PC-A':n===path[Math.floor(path.length/2)]?'Host tujuan menerima Echo Request dan membalas':'Meneruskan paket'));
+ if(w===1&&!f.cable){add('A','Link fisik tidak aktif. Frame belum dapat dikirim.','Ethernet',true);return out;}
+ if(w===2){
+   for(const [p,m] of [['HTTP','Aplikasi menyiapkan permintaan HTTP.'],['TCP','Header transport menandai port tujuan 80.'],['IPv4','Header IP membawa alamat sumber dan tujuan.'],['Ethernet','Frame membawa MAC tujuan untuk pengiriman lokal.']])add('A',m,p);
+   add('S1','Switch meneruskan frame berdasarkan MAC tujuan.','Ethernet');
+   add('D','Server membaca header IP dan TCP.','TCP');
+   add('D',f.http?'HTTP aktif. Server mengirim respons ke klien.':'Port tujuan tidak melayani HTTP pada skenario ini.','HTTP',!f.http);
+   return out;
+ }
+ if(w===3){
+   if(!f.arp){
+     add('A','ARP Request broadcast untuk mencari MAC 192.168.10.20.','ARP');
+     add('S1','Menyebarkan broadcast dalam LAN dan mempelajari MAC sumber.','ARP');
+     add('B','ARP Reply unicast berisi MAC 02:00:00:00:00:0B.','ARP');
+     add('S1','Meneruskan jawaban ke PC-A dan mempelajari MAC PC-B.','ARP');
+   }
+   add('A','Menggunakan entri ARP untuk memilih MAC tujuan.','ARP');
+ }
+ if(w===4&&!f.mask){
+   add('A','Dengan mask /28, IP sumber ada pada 192.168.10.0/28. IP tujuan .20 ada pada 192.168.10.16/28.','IPv4');
+   add('A','Gateway .1 tidak tersedia pada topologi dua PC ini. Pengiriman gagal.','ARP',true);return out;
+ }
+ if(w===4)add('A','192.168.10.10 dan 192.168.10.20 sama-sama berada di 192.168.10.0/24.','IPv4');
+ if(w===5){
+   add('S1','Frame VLAN 10 membawa tag 802.1Q pada trunk ke SW2.','802.1Q');
+   if(!f.vlan){add('S2','Port PC-B berada di VLAN 20. ARP dari VLAN 10 tidak diteruskan ke port itu.','ARP',true);return out;}
+ }
+ if(w===6&&variant==='inter'){
+   add('A','Tujuan berada di VLAN 20. Kirim frame ke gateway VLAN 10.');
+   if(!f.inter){add('L3','Penerusan Layer 3 antar-VLAN dinonaktifkan.', 'IPv4',true);return out;}
+   add('L3','Router memilih subnet VLAN 20 dan meneruskan paket melalui SVI VLAN 20.','IPv4');
+   ping(['A','S1','L3','X','L3','S1','A']);return out;
+ }
+ if(w===6&&variant==='stp'){
+   add(f.stp?'S3':'S2',f.stp?'Port di sisi SW3 pada link SW2–SW3 tidak meneruskan frame.':'Setelah konvergensi, jalur SW1–SW3–SW2 meneruskan frame.','STP');
+   const path=f.stp?['A','S1','S2','B']:['A','S1','S3','S2','B'];
+   ping([...path,...path.slice(0,-1).reverse()]);return out;
+ }
+ if(w===6&&variant==='lag'){
+   add('S1',f.lag?'Port-channel aktif dengan dua anggota. Aliran contoh memakai anggota 1.':'Anggota 2 down. Port-channel tetap aktif melalui anggota 1.','LACP');
+   ping(['A','S1','S2','B','S2','S1','A']);return out;
+ }
+ if(w===7){
+   if(!f.gateway){add('A','Tujuan di luar subnet, tetapi gateway belum tersedia. Paket berhenti di PC-A.','IPv4',true);return out;}
+   add('A','MAC tujuan frame pertama adalah MAC gateway R-A. IP tujuan tetap 192.168.20.20.','Ethernet');
+   add('RA','Pilih next hop 10.0.12.2. Router mengganti header Layer 2 untuk link berikutnya.','IPv4');
+   ping(['A','RA','RB','X','RB','RA','A']);return out;
+ }
+ ping(w===5?['A','S1','S2','B','S2','S1','A']:['A','S1','B','S1','A']);
+ return out;
+}
+
+const wifi={
+ LM:[74,100,'Laptop-MHS','WI-FI','SSID Kampus-MHS\nWPA2-PSK · DHCP'],
+ LD:[74,270,'Laptop-Dosen','WI-FI','SSID Kampus-Dosen\nWPA2-PSK · DHCP'],
+ AM:[235,100,'AP-MHS','ACCESS POINT','SSID Kampus-MHS\nPort akses menuju SW-Akses'],
+ AD:[235,270,'AP-Dosen','ACCESS POINT','SSID Kampus-Dosen\nPort akses VLAN 30 menuju SW-Akses'],
+ SW:[400,185,...devices.SW.slice(2)],
+ R1:[552,185,...devices.R1.slice(2)],
+ R2:[699,185,...devices.R2.slice(2)],
+ PORTAL:[827,185,...devices.PORTAL.slice(2)]
+};
+const wifiLinks=[['LM','AM'],['LD','AD'],['AM','SW'],['AD','SW'],['SW','R1'],['R1','R2'],['R2','PORTAL']];
+const projectCases={
+ portal:['Mahasiswa membuka portal','Uji resolusi nama dan HTTP dari VLAN mahasiswa.','DNS aktif','dns','HTTP + DNS','PORTAL','MHS'],
+ adminMhs:['Mahasiswa mengakses server admin','Prediksi apakah HTTP ke server admin diizinkan dari VLAN 10.','ACL aktif','acl','HTTP','ADMIN','MHS'],
+ adminDosen:['Dosen mengakses server admin','Gunakan hasil uji dosen sebagai pembanding. Matikan HTTP server untuk membedakan kegagalan layanan dari ACL.','HTTP server admin aktif','adminHttp','HTTP','ADMIN','DSN'],
+ failover:['Gangguan link utama','Bandingkan jalur normal dan jalur cadangan setelah konvergensi.','Link R1–R2 aktif','link','ICMP','PORTAL','MHS']
+};
+function traceWifi(f,from,protocol){
+ const student=from==='LM', ap=student?'AM':'AD';
+ const vlan=student&&f.wifiVlan?10:30;
+ const ip='10.10.'+vlan+'.'+(student&&!f.wifiVlan?'101':'100');
+ const gateway='10.10.'+vlan+'.1';
+ const out=[];
+ const add=(n,m,p=protocol)=>out.push({n,m,p,bad:false});
+ add(from,'Asosiasi berhasil ke '+(student?'Kampus-MHS':'Kampus-Dosen'),'802.11');
+ add(ap,'AP meneruskan frame ke port akses switch.','Ethernet');
+ add('SW','Port AP masuk VLAN '+vlan+'. Trunk ke R1 memakai tag VLAN '+vlan+'.','802.1Q');
+ const path=[from,ap,'SW','R1','R2','PORTAL'];
+ for(const stage of ['Discover','Offer','Request','ACK']){
+   const hops=['Discover','Request'].includes(stage)?path:[...path].reverse();
+   hops.forEach(n=>add(n,n===from&&stage==='ACK'
+     ?'DHCP ACK · '+ip+'/24 · Gateway '+gateway+' · DNS 10.10.20.53'
+     :n==='R1'?'DHCP '+stage+' melalui relay':'DHCP '+stage,'DHCP'));
+ }
+ if(protocol==='HTTP'){
+   for(const [p,forward,back] of [
+     ['DNS','Kueri A portal.kampus.test','Respons DNS · 10.10.20.53'],
+     ['HTTP','Permintaan HTTP ke portal','Portal terbuka dari '+ip]
+   ]){
+     path.forEach(n=>add(n,forward,p));
+     [...path].reverse().forEach(n=>add(n,back,p));
+   }
+ }
+ return out;
+}
+function traceProject(f,which){
+ const [,,,,protocol,dest,from]=projectCases[which];
+ if(which==='adminDosen'&&!f.adminHttp){
+   return [from,'SW','R1','R2','SWB','ADMIN'].map(n=>({
+     n,p:'HTTP',m:n==='ADMIN'?'Server admin menerima koneksi, tetapi layanan HTTP nonaktif.':'Meneruskan trafik TCP menuju server admin.',
+     bad:n==='ADMIN'
+   }));
+ }
+ const w=which==='failover'?10:which==='portal'?11:13;
+ return trace(w,f,from,dest,protocol);
+}
+
+function renderMap(active){
+ const svg=el('map'), nodes=topology();
+ const currentLinks=week<9?data()[7]:week===14?wifiLinks:links;
+ const visible=week<9?data()[6]:Object.keys(nodes);
+ const drawLink=(a,b,offset,state)=>{
+   const [x,y]=nodes[a],[u,v]=nodes[b];
+   return `<line class="edge ${state}" x1="${x}" y1="${y+offset}" x2="${u}" y2="${v+offset}"/>`;
+ };
+ svg.innerHTML=currentLinks.map(([a,b])=>{
+   if(week===6&&variant==='lag'&&a==='S1'&&b==='S2')
+     return drawLink(a,b,-7,'')+drawLink(a,b,7,flags.lag?'':'down');
+   if(week===6&&variant==='stp'){
+     if(a==='S1'&&b==='S2'&&!flags.stp)return drawLink(a,b,0,'down');
+     if(a==='S3'&&b==='S2'&&flags.stp)return drawLink(a,b,0,'standby');
+   }
+   if(week===14&&(a==='LM'||a==='LD'))return drawLink(a,b,0,'standby');
+   const down=(week===1&&a==='A'&&!flags.cable)||((week===10||week===15)&&a==='R1'&&b==='R2'&&!flags.link);
+   return drawLink(a,b,0,down?'down':'');
+ }).join('')+
+ visible.map(id=>{const [x,y,label,kind]=nodes[id];return `<g class="node ${id===selected?'selected':''}" data-node="${id}" tabindex="0" role="button" aria-label="${label}" transform="translate(${x} ${y})"><rect x="-57" y="-24" width="114" height="48" rx="8"/><text text-anchor="middle" y="-3" font-size="10" fill="#52717e">${kind}</text><text text-anchor="middle" y="14" font-size="13" font-weight="700" fill="#182a35">${label}</text></g>`;}).join('')+
+ (active?`<circle class="pulse" cx="${nodes[active][0]+47}" cy="${nodes[active][1]-21}" r="9"/>`:'');
+}
+function inspectNode(id){
+ selected=id;const [, ,label,,initial]=topology()[id];
+ let config=initial;
+ if(week<9&&id==='A'){
+   if([1,2,3,5].includes(week))config=config.split('\nGateway')[0];
+   if(week===1&&!flags.cable)config+='\nLink ke SW1: down';
+   if(week===4&&!flags.mask)config=config.replace('.10/24','.10/28');
+   if(week===7&&!flags.gateway)config=config.replace('Gateway 192.168.10.1','Gateway belum diisi');
+ }
+ if(week<9&&id==='B'){
+   config=config.split('\nGateway')[0];
+   if(week===5)config+='\nVLAN port: '+(flags.vlan?'10':'20');
+ }
+ if(week<9&&id==='S1'){
+   config=data()[7].filter(link=>link.includes('S1')).map((link,i)=>'Port '+(i+1)+': '+topology()[link.find(x=>x!=='S1')][2]).join('\n');
+   if(week===5)config+='\nUplink SW2: trunk VLAN 10 dan 20';
+   if(week===6&&variant==='stp')config+='\nRoot bridge';
+   if(week===6&&variant==='lag')config+='\nPort-channel: '+(flags.lag?'2 anggota aktif':'1 anggota aktif');
+ }
+ if(week===14&&id==='AM')config+='\nVLAN akses: '+(flags.wifiVlan?'10':'30');
+ if(week===14&&id==='PORTAL')config='IPv4 10.10.20.53/24\nGW 10.10.20.1\nPool VLAN 10: 10.10.10.100–149\nPool VLAN 30: 10.10.30.100–149\nDNS: portal.kampus.test\nHTTP aktif';
+ if(week===6&&id==='L3')config+='\nPenerusan Layer 3: '+(flags.inter?'aktif':'nonaktif');
+ el('details').textContent=label+'\n'+config;
+ document.querySelector('.node.selected')?.classList.remove('selected');
+ document.querySelector('[data-node="'+id+'"]')?.classList.add('selected');
+}
+function options(id,values){const x=el(id);x.replaceChildren(...values.map(([v,t])=>new Option(t,v)));}
+function clear(){
+ clearInterval(timer);timer=null;events=[];cursor=0;el('log').replaceChildren();
+ el('step').disabled=true;el('play').disabled=true;renderMap();
+}
+function setup(n){
+ week=n;flags={back:true,link:true,dns:true,pat:true,acl:true,cable:true,http:true,arp:false,mask:true,vlan:true,inter:true,stp:true,lag:true,gateway:true,wifiVlan:true,adminHttp:true};
+ const [title,exercise,label,key,p,dest]=data();
+ document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',Number(b.dataset.week)===n));
+ el('topic').textContent=n===6?early[6][0]:n===15?lessons[15][0]:title;
+ el('exercise').textContent=exercise;
+ const experiment=n===15?`<label>Uji proyek <select id="project-case">${Object.entries(projectCases).map(([id,v])=>`<option value="${id}">${v[0]}</option>`).join('')}</select></label>`:n===6?`<label>Eksperimen <select id="experiment">${Object.entries(p6).map(([id,v])=>`<option value="${id}">${v[0]}</option>`).join('')}</select></label>`:'';
+ el('toggles').innerHTML=experiment+`<label><input type="checkbox" ${flags[key]?'checked':''}> ${label}</label>`;
+ if(n===15){el('project-case').value=project;el('project-case').onchange=e=>{project=e.target.value;setup(15);};}
+ if(n===6){el('experiment').value=variant;el('experiment').onchange=e=>{variant=e.target.value;setup(6);};}
+ el('toggles').querySelector('input').onchange=e=>{flags[key]=e.target.checked;clear();inspectNode(selected);el('status').textContent='Kondisi diubah. Klik Kirim paket untuk menguji ulang.';};
+ options('from',n<9?[['A','PC-A']]:n===14?[['LM','Laptop-MHS'],['LD','Laptop-Dosen']]:n===15?[[data()[6],devices[data()[6]][2]]]:n===13?[['MHS','PC Mahasiswa'],['DSN','PC Dosen']]:[['MHS','PC Mahasiswa']]);
+ options('to',[[dest,topology()[dest][2]]]);
+ options('proto',(n===14?['DHCP','HTTP']:n===11?['DHCP','HTTP + DNS','HTTP']:n===13?['HTTP','ICMP']:[p]).map(x=>[x,x==='HTTP + DNS'?'HTTP via nama portal':x==='HTTP'&&n===11?'HTTP via IP':x]));
+ clear();inspectNode(n<9?'A':n===12?'EDGE':n===14?'AM':'R1');
+ el('status').textContent='Topologi dan konfigurasi siap. Klik Kirim paket untuk memulai.';
+}
+function step(){
+ const e=events[cursor++];if(!e)return;
+ renderMap(e.n);const tr=el('log').insertRow();[cursor,topology()[e.n][2],e.p,e.m].forEach(x=>tr.insertCell().textContent=x);if(e.bad)tr.className='bad';
+ tr.scrollIntoView({block:'nearest'});
+ if(cursor===events.length){clearInterval(timer);timer=null;el('step').disabled=true;el('play').disabled=true;el('status').textContent=(e.bad?'Gagal · ':'Selesai · ')+e.m;}
+ else el('status').textContent='Kejadian '+cursor+' dari '+events.length;
+}
+el('tabs').innerHTML=Object.entries({...early,...lessons}).map(([n,[t]])=>`<button data-week="${n}">P${n} · ${t}</button>`).join('');
+el('tabs').onclick=e=>{if(e.target.dataset.week)setup(Number(e.target.dataset.week));};
+el('map').onclick=e=>{const n=e.target.closest('[data-node]');if(n)inspectNode(n.dataset.node);};
+el('map').onkeydown=e=>{if(['Enter',' '].includes(e.key)&&e.target.dataset.node){e.preventDefault();inspectNode(e.target.dataset.node);}};
+el('send').onclick=()=>{clear();events=week<9?traceEarly(week,flags,variant):week===14?traceWifi(flags,el('from').value,el('proto').value):week===15?traceProject(flags,project):trace(week,flags,el('from').value,el('to').value,el('proto').value);el('step').disabled=false;el('play').disabled=false;step();};
+el('step').onclick=()=>{clearInterval(timer);timer=null;step();};
+el('play').onclick=()=>{if(!timer)timer=setInterval(step,420);};
+el('reset').onclick=()=>setup(week);
+setup(1);
+</script></html>
